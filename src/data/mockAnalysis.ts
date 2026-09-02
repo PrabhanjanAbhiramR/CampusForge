@@ -14,7 +14,7 @@ export interface Readiness {
 }
 
 export interface ResearchTrend {
-  momentum: 'Low' | 'Moderate' | 'High'
+  momentum: 'Low' | 'Medium' | 'Medium-High' | 'High'
   summary: string
 }
 

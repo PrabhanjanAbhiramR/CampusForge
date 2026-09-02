@@ -193,7 +193,8 @@ function directlyMatchedTrendRows(rows: Array<Record<string, unknown>>, facets: 
 function trendMomentum(matches: Array<{ row: Record<string, unknown> }>): CampusForgeAnalysis['researchTrend']['momentum'] {
   const indicators = matches.map(({ row }) => normalizeEvidenceText(trendSignalValue(row)))
   if (indicators.some((indicator) => indicator === 'high')) return 'High'
-  if (indicators.some((indicator) => indicator.includes('medium') || indicator.includes('moderate'))) return 'Moderate'
+  if (indicators.some((indicator) => indicator === 'medium high')) return 'Medium-High'
+  if (indicators.some((indicator) => indicator === 'medium' || indicator === 'moderate')) return 'Medium'
   return 'Low'
 }
 

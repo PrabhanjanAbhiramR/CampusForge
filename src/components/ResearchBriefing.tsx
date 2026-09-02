@@ -64,7 +64,7 @@ export function ResearchBriefing({ analysis }: { analysis: CampusForgeAnalysis }
       </BriefingSection>
 
       <BriefingSection number="03" title="Existing research">
-        <div className="research-connection">
+        {projects.length > 0 ? <><div className="research-connection">
           <div className="connection-line" aria-hidden="true" />
           {projects.map((project, index) => (
             <div className="project-row" key={project.id}>
@@ -74,37 +74,39 @@ export function ResearchBriefing({ analysis }: { analysis: CampusForgeAnalysis }
             </div>
           ))}
         </div>
-        <div className="connection-insight"><Link2 size={16} /><p>{analysis.researchConnection}</p></div>
+        <div className="connection-insight"><Link2 size={16} /><p>{analysis.researchConnection}</p></div></>
+          : <p className="section-empty-state">No directly relevant existing projects were found.</p>}
       </BriefingSection>
 
       <BriefingSection number="04" title="Capability gaps" className="gaps-section">
         <div className="gap-tag">Inferred gaps · not dataset facts</div>
-        <div className="gap-list">
+        {gaps.length > 0 ? <div className="gap-list">
           {gaps.map((gap) => <div className="gap-row" key={gap.id}><strong>{gap.title}</strong><p>{gap.explanation}</p></div>)}
-        </div>
+        </div> : <p className="section-empty-state">No capability gaps were identified in the returned analysis.</p>}
       </BriefingSection>
 
       <BriefingSection number="05" title="Collaboration opportunity" className="collaboration-section">
-        <div className="collaboration-lockup">
+        {collaboration.departments.length > 0 ? <><div className="collaboration-lockup">
           {collaboration.departments.map((department, index) => (
             <span className="department-pair" key={department}>
               {index > 0 && <b aria-hidden="true">×</b>}<span>{department}</span>
             </span>
           ))}
         </div>
-        <p className="collaboration-intro">{collaboration.summary}</p>
+        <p className="collaboration-intro">{collaboration.summary}</p></>
+          : <p className="section-empty-state">No directly supported cross-department collaboration was identified.</p>}
         <div className="team-heading"><Users size={16} /><h3>Suggested team</h3></div>
-        <div className="team-list">
+        {collaboration.members.length > 0 ? <div className="team-list">
           {collaboration.members.map((member) => {
             const person = facultyById.get(member.facultyId)
             return <div key={member.facultyId}><strong>{person?.name ?? 'Faculty member'}</strong><span>{member.contribution}</span></div>
           })}
-        </div>
-        <div className="complement-flow">
+        </div> : <p className="section-empty-state team-empty-state">No directly relevant faculty members are available for a suggested team.</p>}
+        {collaboration.capabilityFlow.length > 0 && <div className="complement-flow">
           {collaboration.capabilityFlow.map((step, index) => (
             <span className="flow-step" key={step}>{index > 0 && <ArrowDown size={14} />}<span>{step}</span></span>
           ))}
-        </div>
+        </div>}
       </BriefingSection>
 
       <section className="final-recommendation">

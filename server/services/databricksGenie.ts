@@ -106,7 +106,7 @@ Generic technology overlap is supporting evidence, not direct domain evidence.
 const campusForgeContract = `{
   "opportunity": { "title": string, "verdict": string, "rationale": string },
   "readiness": { "score": number, "maximum": 100, "label": "Prototype readiness", "disclaimer": string },
-  "researchTrend": { "momentum": "Low" | "Moderate" | "High", "summary": string },
+  "researchTrend": { "momentum": "Low" | "Medium" | "Medium-High" | "High", "summary": string },
   "faculty": [{ "id": string, "name": string, "department": string, "expertise": string[] }],
   "labs": [{ "id": string, "name": string, "capabilities": string[] }],
   "equipment": [{ "id": string, "name": string, "labId": string, "capability": string, "utilization": number, "status": "Available" | "Limited" | "Unavailable" }],

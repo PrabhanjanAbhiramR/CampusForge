@@ -2,6 +2,17 @@ import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { researchTrendOpportunities } from '../data/researchTrends'
 
+const momentumClassifications = [
+  { label: 'High', range: '76–100', description: 'Strong prototype research activity signal.' },
+  { label: 'Medium-High', range: '70–75', description: 'Promising activity with meaningful momentum.' },
+  { label: 'Medium', range: '60–69', description: 'Developing research activity with moderate momentum.' },
+  { label: 'Low', range: 'Below 60', description: 'Limited research activity signal.' },
+]
+
+function discoverQuestion(researchArea: string) {
+  return `Can our campus pursue ${researchArea}?`
+}
+
 export function ResearchTrendsPage() {
   return (
     <div className="trends-page">
@@ -46,17 +57,35 @@ export function ResearchTrendsPage() {
                   <td><span className={`growth-signal growth-${opportunity.growth.toLowerCase()}`}>{opportunity.growth}</span></td>
                   <td><span className="technology-list">{opportunity.keyTechnologies.join(' · ')}</span></td>
                   <td>
-                    {opportunity.discoverQuery ? (
-                      <Link className="evaluate-link" to="/" aria-label={`Evaluate ${opportunity.researchArea} in Discover`}>
-                        Evaluate <ArrowRight size={13} strokeWidth={1.7} />
-                      </Link>
-                    ) : <span className="no-action" aria-hidden="true">—</span>}
+                    <Link className="evaluate-link"
+                      to={`/?query=${encodeURIComponent(discoverQuestion(opportunity.researchArea))}`}
+                      aria-label={`Evaluate ${opportunity.researchArea} in Discover`}>
+                      Evaluate <ArrowRight size={13} strokeWidth={1.7} />
+                    </Link>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        <section className="momentum-classification" aria-labelledby="momentum-classification-title">
+          <div className="momentum-classification-heading">
+            <p className="register-kicker">Classification guide</p>
+            <h2 id="momentum-classification-title">How momentum is classified</h2>
+          </div>
+          <div className="momentum-bands">
+            {momentumClassifications.map((classification) => (
+              <article key={classification.label}>
+                <div><strong>{classification.label}</strong><span>{classification.range}</span></div>
+                <p>{classification.description}</p>
+              </article>
+            ))}
+          </div>
+          <p className="momentum-clarification">
+            Growth classifications are derived from the synthetic Research Activity Score for this prototype. They do not represent verified publication growth.
+          </p>
+        </section>
 
         <p className="trend-disclaimer">
           <strong>Prototype note</strong>

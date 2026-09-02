@@ -16,11 +16,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-block">
-          <div className="brand-mark" aria-hidden="true">CF</div>
-          <div>
-            <p className="brand-name">CampusForge</p>
-            <p className="brand-subtitle">Research Intelligence</p>
-          </div>
+          <img className="brand-logo" src="/campusforge-logo.png" alt="CampusForge Research Intelligence" />
         </div>
 
         <nav className="primary-nav" aria-label="Primary navigation">

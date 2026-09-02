@@ -1,4 +1,4 @@
-export type ResearchGrowth = 'High' | 'Medium-High' | 'Medium'
+export type ResearchGrowth = 'High' | 'Medium-High' | 'Medium' | 'Low'
 
 export interface ResearchTrendOpportunity {
   id: string

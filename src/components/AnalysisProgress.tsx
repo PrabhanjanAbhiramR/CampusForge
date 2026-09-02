@@ -8,16 +8,16 @@ const analysisSteps = [
   'Detecting capability gaps',
 ]
 
-export function AnalysisProgress({ activeStep, complete }: { activeStep: number; complete: boolean }) {
+export function AnalysisProgress({ activeStep, complete, comparison = false }: { activeStep: number; complete: boolean; comparison?: boolean }) {
   return (
     <section className="analysis-panel" aria-live="polite" aria-busy={!complete}>
       <div className="analysis-heading">
         <div>
-          <p className="analysis-kicker">Campus capability scan</p>
-          <h2>{complete ? 'Initial assessment complete' : 'Evaluating opportunity'}</h2>
+          <p className="analysis-kicker">{comparison ? 'Parallel campus capability scan' : 'Campus capability scan'}</p>
+          <h2>{complete ? 'Initial assessment complete' : comparison ? 'Comparing two opportunities' : 'Evaluating opportunity'}</h2>
         </div>
         <span className={complete ? 'analysis-status complete' : 'analysis-status'}>
-          {complete ? '5 sources reviewed' : 'In progress'}
+          {complete ? '5 sources reviewed' : comparison ? '2 analyses in progress' : 'In progress'}
         </span>
       </div>
 

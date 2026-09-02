@@ -4,12 +4,14 @@ import { OpportunityQuery } from '../components/OpportunityQuery'
 import { ResearchBriefing } from '../components/ResearchBriefing'
 import type { CampusForgeAnalysis } from '../data/mockAnalysis'
 import { analyzeOpportunity as requestOpportunityAnalysis } from '../services/campusForgeApi'
+import { useSearchParams } from 'react-router-dom'
 
 const defaultQuery = 'Can our campus pursue Edge AI for smart agriculture?'
 const totalSteps = 5
 
 export function DiscoverPage() {
-  const [query, setQuery] = useState(defaultQuery)
+  const [searchParams] = useSearchParams()
+  const [query, setQuery] = useState(() => searchParams.get('query')?.trim() || defaultQuery)
   const [analysisVisible, setAnalysisVisible] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
   const [analysis, setAnalysis] = useState<CampusForgeAnalysis | null>(null)

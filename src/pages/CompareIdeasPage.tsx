@@ -214,7 +214,7 @@ export function CompareIdeasPage() {
       </form>
 
       {analyzing ? (
-        <AnalysisProgress activeStep={activeStep} complete={false} />
+        <AnalysisProgress activeStep={activeStep} complete={false} comparison />
       ) : hasResults ? (
         <>
           <section className="comparison-results" aria-label="Opportunity comparison results">
