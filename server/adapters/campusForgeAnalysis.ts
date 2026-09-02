@@ -142,25 +142,122 @@ function domainFacets(query: string) {
   return facets
 }
 
+function evidenceToken(value: string) {
+  if (value.endsWith('ics') && value.length > 5) return value.slice(0, -3)
+  if (value.endsWith('s') && !value.endsWith('ous') && value.length > 4) return value.slice(0, -1)
+  return value
+}
+
 function matchesDomainFacet(value: unknown, facet: string[]) {
   if (facet.length === 0) return false
   const normalized = normalizeEvidenceText(JSON.stringify(value))
-  if (facet.length === 1) return normalized.split(' ').includes(facet[0])
-  return normalized.includes(facet.join(' '))
+  const valueTokens = new Set(normalized.split(' ').map(evidenceToken))
+  return facet.every((token) => valueTokens.has(evidenceToken(token)))
 }
 
-function coveredFacets(value: unknown, facets: string[][]) {
-  return facets.filter((facet) => matchesDomainFacet(value, facet)).length
+function evidenceRows(queryEvidence: GenieQueryEvidence[]) {
+  return queryEvidence.flatMap((result) => result.rows.map((row) => Object.fromEntries(
+    result.columns.map((column, index) => [
+      normalizeEvidenceText(column).replace(/ /g, '_'),
+      row[index],
+    ]),
+  )))
 }
 
-function trendFacetCoverage(queryEvidence: GenieQueryEvidence[], facets: string[][]) {
-  const trendValues = queryEvidence.flatMap((result) => {
-    const trendColumns = result.columns
-      .map((column, index) => ({ column: normalizeEvidenceText(column), index }))
-      .filter(({ column }) => /(^| )(trend|topic|research area|technology)( |$)/.test(column))
-    return trendColumns.flatMap(({ index }) => result.rows.map((row) => row[index]))
+function queryDomainTokens(facets: string[][]) {
+  return new Set(facets.flat())
+}
+
+function trendSignalValue(row: Record<string, unknown>) {
+  return row.growth ?? row.growth_indicator ?? row.momentum
+    ?? Object.values(row).find((value) => /^(low|medium|medium high|moderate|high)$/.test(normalizeEvidenceText(value)))
+}
+
+function directlyMatchedTrendRows(rows: Array<Record<string, unknown>>, facets: string[][]) {
+  const domainTokens = queryDomainTokens(facets)
+  return rows.flatMap((row) => {
+    const source = normalizeEvidenceText(row.source_table ?? row.source ?? '')
+    const trendValue = row.research_area ?? row.domain_field ?? row.trend ?? row.topic ?? row.technology
+      ?? row.name ?? row.name_or_title ?? row.entity_name
+    const trendSignal = trendSignalValue(row)
+    if (!trendValue || !trendSignal || (source && !/(trend|research area)/.test(source))) return []
+
+    const trendTokens = normalizeEvidenceText(trendValue).split(' ').filter(Boolean)
+    const minimumTokens = domainTokens.size > 1 ? 2 : 1
+    const direct = trendTokens.length >= minimumTokens
+      && trendTokens.every((token) => domainTokens.has(token) || queryFramingWords.has(token))
+    return direct ? [{ row, facet: trendTokens.filter((token) => !queryFramingWords.has(token)) }] : []
   })
-  return facets.filter((facet) => trendValues.some((value) => matchesDomainFacet(value, facet))).length
+}
+
+function trendMomentum(matches: Array<{ row: Record<string, unknown> }>): CampusForgeAnalysis['researchTrend']['momentum'] {
+  const indicators = matches.map(({ row }) => normalizeEvidenceText(trendSignalValue(row)))
+  if (indicators.some((indicator) => indicator === 'high')) return 'High'
+  if (indicators.some((indicator) => indicator.includes('medium') || indicator.includes('moderate'))) return 'Moderate'
+  return 'Low'
+}
+
+type DirectCategory = 'faculty' | 'labs' | 'equipment' | 'projects'
+
+function rowHasCategory(row: Record<string, unknown>, category: DirectCategory) {
+  const categoryLabel = normalizeEvidenceText([
+    row.evidence_role,
+    row.entity_type,
+    row.source_table,
+    row.source,
+  ].filter(Boolean).join(' '))
+  if (category === 'faculty') return Boolean(/faculty/.test(categoryLabel) || row.faculty_id || row.expertise)
+  if (category === 'labs') return Boolean(/\blab/.test(categoryLabel) || row.lab_name || row.lab_capabilities)
+  if (category === 'equipment') return Boolean(/equipment/.test(categoryLabel) || row.equipment_id || row.equipment_name)
+  return Boolean(/project/.test(categoryLabel) || row.project_name || row.project_title)
+}
+
+function directItems<T>(items: T[], facets: string[][]) {
+  return items.filter((item) => facets.some((facet) => matchesDomainFacet(item, facet)))
+}
+
+function directRawRows(rows: Array<Record<string, unknown>>, category: DirectCategory, facets: string[][]) {
+  return rows.filter((row) => rowHasCategory(row, category)
+    && facets.some((facet) => matchesDomainFacet(row, facet)))
+}
+
+function rawEntityKey(row: Record<string, unknown>, category: DirectCategory) {
+  if (category === 'faculty') return row.faculty_id ?? row.entity_id ?? row.name ?? row.name_or_title ?? row.id
+  if (category === 'labs') return row.lab_id ?? row.entity_id ?? row.lab_name ?? row.name_or_title ?? row.id
+  if (category === 'equipment') return row.equipment_id ?? row.entity_id ?? row.equipment_name ?? row.name_or_title ?? row.id
+  return row.project_id ?? row.entity_id ?? row.project_name ?? row.project_title ?? row.name_or_title ?? row.id
+}
+
+function directCount<T extends { id: string }>(items: T[], rows: Array<Record<string, unknown>>, category: DirectCategory) {
+  const keys = new Set(items.map((item) => normalizeEvidenceText(item.id)))
+  rows.forEach((row) => {
+    const key = normalizeEvidenceText(rawEntityKey(row, category))
+    if (key) keys.add(key)
+  })
+  return keys.size
+}
+
+function equipmentAvailability(items: CampusForgeAnalysis['equipment'], rawRows: Array<Record<string, unknown>>) {
+  const statusByEquipment = new Map<string, string>(
+    items.map((item) => [normalizeEvidenceText(item.id), item.status]),
+  )
+  rawRows.forEach((row) => {
+    const key = normalizeEvidenceText(rawEntityKey(row, 'equipment'))
+    if (key && !statusByEquipment.has(key)) {
+      statusByEquipment.set(key, String(row.availability ?? row.status ?? ''))
+    }
+  })
+  const statuses = [...statusByEquipment.values()]
+  if (statuses.length === 0) return 0
+  const weights: number[] = statuses.map((status) => status === 'Available' ? 1 : status === 'Limited' ? 0.5 : 0)
+  return weights.reduce((total, weight) => total + weight, 0) / weights.length
+}
+
+function verdictFor(score: number, hasDirectEvidence: boolean) {
+  if (!hasDirectEvidence) return 'Insufficient direct evidence'
+  if (score >= 75) return 'Strong direct-evidence fit'
+  if (score >= 50) return 'Moderate direct-evidence fit'
+  return 'Limited direct evidence'
 }
 
 function calibrateDirectEvidence(
@@ -171,35 +268,88 @@ function calibrateDirectEvidence(
   const facets = domainFacets(query)
   if (facets.length === 0) return analysis
 
-  const categoryEvidence = [analysis.faculty, analysis.labs, analysis.equipment, analysis.projects]
-  const rawEvidenceValues = queryEvidence.flatMap((result) => result.rows.flat())
-  const directlySupportedFacets = facets.filter((facet) =>
-    categoryEvidence.some((items) => items.some((item) => matchesDomainFacet(item, facet)))
-      || rawEvidenceValues.some((value) => matchesDomainFacet(value, facet)),
-  ).length
-  const matchingTrendFacets = trendFacetCoverage(queryEvidence, facets)
-  const directEvidenceBreadth = [
-    ...categoryEvidence.map((items) => coveredFacets(items, facets) > 0),
-    matchingTrendFacets > 0,
+  const rows = evidenceRows(queryEvidence)
+  const trendMatches = directlyMatchedTrendRows(rows, facets)
+  const uniqueTrendMatches = [...new Map(trendMatches.map((match) => [
+    normalizeEvidenceText(match.row.id ?? match.row.research_area ?? match.row.domain_field),
+    match,
+  ])).values()]
+  const trendFacets = uniqueTrendMatches.map((match) => match.facet)
+  const matchedTrendTokens = trendFacets.flatMap((facet) => facet
+    .filter((token) => token.length >= 5)
+    .map((token) => [token]))
+  const matchingFacets = [...facets, ...trendFacets, ...matchedTrendTokens]
+  const faculty = directItems(analysis.faculty, matchingFacets)
+  const labs = directItems(analysis.labs, matchingFacets)
+  const equipment = directItems(analysis.equipment, matchingFacets)
+  const projects = directItems(analysis.projects, matchingFacets)
+  const rawFaculty = directRawRows(rows, 'faculty', matchingFacets)
+  const rawLabs = directRawRows(rows, 'labs', matchingFacets)
+  const rawEquipment = directRawRows(rows, 'equipment', matchingFacets)
+  const rawProjects = directRawRows(rows, 'projects', matchingFacets)
+  const categoryContributions = [
+    faculty.length > 0 || rawFaculty.length > 0 ? 1 : 0,
+    labs.length > 0 || rawLabs.length > 0 ? 1 : 0,
+    equipmentAvailability(equipment, rawEquipment),
+    projects.length > 0 || rawProjects.length > 0 ? 1 : 0,
+    uniqueTrendMatches.length > 0 ? 1 : 0,
   ]
-  const domainCoverage = directlySupportedFacets / facets.length
-  const breadth = directEvidenceBreadth.filter(Boolean).length / directEvidenceBreadth.length
-  const directEvidenceWeight = domainCoverage * ((1 + breadth) / 2)
-  const calibratedScore = Math.round(analysis.readiness.maximum * directEvidenceWeight)
-  const hasMatchingTrend = matchingTrendFacets === facets.length
+  const totalContribution = categoryContributions.reduce((total, contribution) => total + contribution, 0)
+  const calibratedScore = Math.round(analysis.readiness.maximum * totalContribution / categoryContributions.length)
+  const verdict = verdictFor(calibratedScore, totalContribution > 0)
+  const momentum = trendMomentum(uniqueTrendMatches)
+  console.info('CampusForge direct evidence counts:', JSON.stringify({
+    faculty: directCount(faculty, rawFaculty, 'faculty'),
+    labs: directCount(labs, rawLabs, 'labs'),
+    equipment: directCount(equipment, rawEquipment, 'equipment'),
+    projects: directCount(projects, rawProjects, 'projects'),
+    trends: uniqueTrendMatches.length,
+  }))
 
   return {
     ...analysis,
+    opportunity: { ...analysis.opportunity, verdict },
     readiness: {
       ...analysis.readiness,
       score: calibratedScore,
       disclaimer: `${analysis.readiness.disclaimer} Score is calibrated to direct domain evidence and its breadth across campus records; adjacent capabilities alone do not establish readiness.`,
     },
-    researchTrend: hasMatchingTrend ? analysis.researchTrend : {
-      momentum: 'Low',
-      summary: 'No directly matching research trend was found in the retrieved campus evidence. Adjacent research areas were not used as a substitute.',
+    researchTrend: {
+      momentum,
+      summary: uniqueTrendMatches.length > 0
+        ? `Momentum is based on ${uniqueTrendMatches.length} directly matched research trend record${uniqueTrendMatches.length === 1 ? '' : 's'}.`
+        : 'No directly matching research trend was found in the retrieved campus evidence. Adjacent research areas were not used as a substitute.',
     },
+    recommendation: { ...analysis.recommendation, verdict },
   }
+}
+
+function mapEquipmentLabIds(
+  equipment: CampusForgeAnalysis['equipment'],
+  labs: CampusForgeAnalysis['labs'],
+  queryEvidence: GenieQueryEvidence[],
+) {
+  const rows = evidenceRows(queryEvidence)
+  const labByReference = new Map(labs.flatMap((lab) => [
+    [normalizeEvidenceText(lab.id), lab.id],
+    [normalizeEvidenceText(lab.name), lab.id],
+  ]))
+
+  return equipment.map((asset) => {
+    const existingLabId = labByReference.get(normalizeEvidenceText(asset.labId))
+    if (existingLabId) return { ...asset, labId: existingLabId }
+
+    const evidenceRow = rows.find((row) => {
+      const evidenceId = row.equipment_id ?? row.id
+      const evidenceName = row.equipment_name ?? row.name
+      return normalizeEvidenceText(evidenceId) === normalizeEvidenceText(asset.id)
+        || normalizeEvidenceText(evidenceName) === normalizeEvidenceText(asset.name)
+    })
+    const mappedLabId = labByReference.get(normalizeEvidenceText(
+      evidenceRow?.lab_id ?? evidenceRow?.lab_name ?? evidenceRow?.department_or_lab,
+    ))
+    return mappedLabId ? { ...asset, labId: mappedLabId } : asset
+  })
 }
 
 function groundAnalysis(
@@ -214,7 +364,11 @@ function groundAnalysis(
 
   const faculty = analysis.faculty.filter((person) => isSupported(person.name))
   const labs = analysis.labs.filter((lab) => isSupported(lab.name))
-  const equipment = analysis.equipment.filter((asset) => isSupported(asset.name))
+  const equipment = mapEquipmentLabIds(
+    analysis.equipment.filter((asset) => isSupported(asset.name)),
+    labs,
+    queryEvidence,
+  )
   const projects = analysis.projects.filter((project) => isSupported(project.title))
   const facultyIds = new Set(faculty.map((person) => person.id))
 
