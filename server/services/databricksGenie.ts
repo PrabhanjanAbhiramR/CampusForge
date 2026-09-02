@@ -32,8 +32,15 @@ interface StartConversationResponse {
 
 export interface GenieConfig {
   host: string
-  token: string
   spaceId: string
+  credentials:
+    | { type: 'pat'; token: string }
+    | { type: 'oauth'; clientId: string; clientSecret: string }
+}
+
+interface OAuthTokenResponse {
+  access_token?: string
+  expires_in?: number
 }
 
 export interface CompletedGenieConversation {
@@ -71,6 +78,7 @@ export class GenieServiceError extends Error {
 const terminalFailureStatuses = new Set<GenieStatus>(['FAILED', 'QUERY_RESULT_EXPIRED', 'CANCELLED'])
 const pollingIntervalMs = 1_000
 const pollingTimeoutMs = 90_000
+let oauthTokenCache: { token: string; expiresAt: number } | null = null
 
 const analysisPrompt = (query: string) => `
 Evaluate this university research opportunity using only evidence available in this CampusForge Genie space:
@@ -120,30 +128,99 @@ const campusForgeContract = `{
 
 export function getGenieConfig(): GenieConfig | null {
   const host = process.env.DATABRICKS_HOST?.trim().replace(/\/$/, '')
-  const token = process.env.DATABRICKS_TOKEN?.trim()
   const spaceId = process.env.DATABRICKS_GENIE_SPACE_ID?.trim()
+  const clientId = process.env.DATABRICKS_CLIENT_ID?.trim()
+  const clientSecret = process.env.DATABRICKS_CLIENT_SECRET?.trim()
+  const token = process.env.DATABRICKS_TOKEN?.trim()
+  const isDatabricksApp = Boolean(process.env.DATABRICKS_APP_NAME || process.env.DATABRICKS_APP_PORT)
 
-  if (!host || !token || !spaceId) return null
-  return { host, token, spaceId }
+  if (!host || !spaceId) return null
+  if (clientId && clientSecret) {
+    return { host, spaceId, credentials: { type: 'oauth', clientId, clientSecret } }
+  }
+  if (!isDatabricksApp && token) {
+    return { host, spaceId, credentials: { type: 'pat', token } }
+  }
+  return null
+}
+
+async function getOAuthToken(config: Extract<GenieConfig['credentials'], { type: 'oauth' }>, host: string) {
+  if (oauthTokenCache && oauthTokenCache.expiresAt > Date.now() + 60_000) return oauthTokenCache.token
+
+  let response: Response
+  try {
+    response = await fetch(`${host}/oidc/v1/token`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials&scope=all-apis',
+    })
+  } catch {
+    console.error('Databricks OAuth token request failed:', JSON.stringify({ reason: 'network_error' }))
+    throw new GenieServiceError('Unable to reach the Databricks OAuth service.', 'API')
+  }
+
+  if (!response.ok) {
+    console.error('Databricks OAuth token request failed:', JSON.stringify({
+      status: response.status,
+      statusText: response.statusText,
+    }))
+    throw new GenieServiceError('Databricks service principal authentication failed.', 'API')
+  }
+
+  const result = await response.json() as OAuthTokenResponse
+  if (!result.access_token) {
+    console.error('Databricks OAuth token request failed:', JSON.stringify({ reason: 'missing_access_token' }))
+    throw new GenieServiceError('Databricks OAuth response did not include an access token.', 'API')
+  }
+
+  oauthTokenCache = {
+    token: result.access_token,
+    expiresAt: Date.now() + (result.expires_in ?? 3_600) * 1_000,
+  }
+  return oauthTokenCache.token
+}
+
+async function getAccessToken(config: GenieConfig) {
+  return config.credentials.type === 'pat'
+    ? config.credentials.token
+    : getOAuthToken(config.credentials, config.host)
 }
 
 async function genieRequest<T>(config: GenieConfig, path: string, init?: RequestInit): Promise<T> {
   let response: Response
   try {
+    const accessToken = await getAccessToken(config)
     response = await fetch(`${config.host}${path}`, {
       ...init,
       headers: {
-        Authorization: `Bearer ${config.token}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         ...init?.headers,
       },
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof GenieServiceError) throw error
+    console.error('Databricks Genie request failed:', JSON.stringify({
+      method: init?.method ?? 'GET',
+      path,
+      authMode: config.credentials.type,
+      reason: 'network_error',
+    }))
     throw new GenieServiceError('Unable to reach the Databricks Genie service.', 'API')
   }
 
   if (!response.ok) {
     const authenticationFailure = response.status === 401 || response.status === 403
+    console.error('Databricks Genie request failed:', JSON.stringify({
+      method: init?.method ?? 'GET',
+      path,
+      status: response.status,
+      statusText: response.statusText,
+      authMode: config.credentials.type,
+    }))
     throw new GenieServiceError(
       authenticationFailure
         ? 'Databricks Genie authentication or authorization failed.'
