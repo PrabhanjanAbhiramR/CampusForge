@@ -1,12 +1,15 @@
 import cors from 'cors'
 import 'dotenv/config'
 import express from 'express'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { CampusForgeAnalysis } from '../src/data/mockAnalysis'
 import { adaptGenieMessage, CampusForgeAdapterError, summarizeGenieMessage, summarizeQueryEvidence } from './adapters/campusForgeAnalysis'
 import { GenieServiceError, getGenieConfig, requestStructuredRepair, startGenieAnalysis } from './services/databricksGenie'
 
 const app = express()
 const port = Number(process.env.PORT) || 3001
+const distPath = fileURLToPath(new URL('../dist', import.meta.url))
 const genieConfig = getGenieConfig()
 const analysisCache = new Map<string, { analysis: CampusForgeAnalysis; expiresAt: number }>()
 const analysisCacheTtlMs = 60 * 60 * 1000
@@ -70,6 +73,11 @@ app.post('/api/analyze', async (request, response) => {
     console.error('CampusForge Genie request failed:', message)
     response.status(status).json({ error: message })
   }
+})
+
+app.use(express.static(distPath))
+app.get(/^\/(?!api(?:\/|$)).*/, (_request, response) => {
+  response.sendFile(path.join(distPath, 'index.html'))
 })
 
 app.listen(port, () => {

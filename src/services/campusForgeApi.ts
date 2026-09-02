@@ -1,6 +1,6 @@
 import type { CampusForgeAnalysis } from '../data/mockAnalysis'
 
-const analyzeEndpoint = 'http://localhost:3001/api/analyze'
+const analyzeEndpoint = import.meta.env.DEV ? 'http://localhost:3001/api/analyze' : '/api/analyze'
 
 export async function analyzeOpportunity(query: string): Promise<CampusForgeAnalysis> {
   if (!query.trim()) {
