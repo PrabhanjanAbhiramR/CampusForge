@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
-import { BarChart3, BookOpenText, Building2, Compass, Network } from 'lucide-react'
+import { BarChart3, BookOpenText, Building2, Columns2, Compass, Network } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const navigation = [
   { label: 'Discover', icon: Compass, to: '/' },
+  { label: 'Compare Ideas', icon: Columns2, to: '/compare-ideas' },
   { label: 'Research Trends', icon: BarChart3, to: '/research-trends' },
   { label: 'Campus Resources', icon: Building2, to: '/campus-resources' },
   { label: 'Collaborations', icon: Network, to: '/collaborations' },

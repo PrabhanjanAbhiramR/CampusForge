@@ -4,6 +4,7 @@ import { CampusResourcesPage } from './pages/CampusResourcesPage'
 import { CollaborationsPage } from './pages/CollaborationsPage'
 import { InsightsPage } from './pages/InsightsPage'
 import { ResearchTrendsPage } from './pages/ResearchTrendsPage'
+import { CompareIdeasPage } from './pages/CompareIdeasPage'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 function App() {
@@ -11,6 +12,7 @@ function App() {
     <AppShell>
       <Routes>
         <Route path="/" element={<DiscoverPage />} />
+        <Route path="/compare-ideas" element={<CompareIdeasPage />} />
         <Route path="/research-trends" element={<ResearchTrendsPage />} />
         <Route path="/campus-resources" element={<CampusResourcesPage />} />
         <Route path="/collaborations" element={<CollaborationsPage />} />
