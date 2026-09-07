@@ -8,21 +8,30 @@ const analysisSteps = [
   'Detecting capability gaps',
 ]
 
+const assessmentDimensions = [
+  'Research momentum',
+  'Faculty expertise',
+  'Campus infrastructure',
+  'Existing projects',
+  'Capability gaps',
+]
+
 export function AnalysisProgress({ activeStep, complete, comparison = false }: { activeStep: number; complete: boolean; comparison?: boolean }) {
+  const displayedSteps = comparison ? analysisSteps : assessmentDimensions
   return (
     <section className="analysis-panel" aria-live="polite" aria-busy={!complete}>
       <div className="analysis-heading">
         <div>
-          <p className="analysis-kicker">{comparison ? 'Parallel campus capability scan' : 'Campus capability scan'}</p>
-          <h2>{complete ? 'Initial assessment complete' : comparison ? 'Comparing two opportunities' : 'Evaluating opportunity'}</h2>
+          <p className="analysis-kicker">{comparison ? 'Parallel campus capability scan' : 'Opportunity assessment'}</p>
+          <h2>{complete ? 'Initial assessment complete' : comparison ? 'Comparing two opportunities' : 'Preparing opportunity assessment'}</h2>
         </div>
         <span className={complete ? 'analysis-status complete' : 'analysis-status'}>
-          {complete ? '5 sources reviewed' : comparison ? '2 analyses in progress' : 'In progress'}
+          {complete ? (comparison ? '5 sources reviewed' : 'Complete') : comparison ? '2 analyses in progress' : 'Analysis running'}
         </span>
       </div>
 
       <ol className="analysis-steps">
-        {analysisSteps.map((step, index) => {
+        {displayedSteps.map((step, index) => {
           const isComplete = complete || index < activeStep
           const isActive = !complete && index === activeStep
           return (
@@ -43,6 +52,7 @@ export function AnalysisProgress({ activeStep, complete, comparison = false }: {
           The opportunity is ready for a deeper evidence and feasibility review.
         </p>
       )}
+      {!complete && !comparison && <p className="analysis-note">This progress display represents assessment coverage, not live Databricks workflow stages.</p>}
     </section>
   )
 }

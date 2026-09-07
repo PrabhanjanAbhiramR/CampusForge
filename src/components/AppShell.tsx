@@ -1,6 +1,9 @@
-import type { ReactNode } from 'react'
-import { BarChart3, BookOpenText, Building2, Columns2, Compass, Network } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { BarChart3, BookOpenText, Building2, Columns2, Compass, Menu, Network } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
+import { ThemeToggle } from './ThemeToggle'
+import { Button } from './ui/Button'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/Sheet'
 
 const navigation = [
   { label: 'Discover', icon: Compass, to: '/' },
@@ -11,37 +14,58 @@ const navigation = [
   { label: 'Insights', icon: BookOpenText, to: '/insights' },
 ]
 
-export function AppShell({ children }: { children: ReactNode }) {
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand-block">
-          <img className="brand-logo" src="/campusforge-logo.png" alt="CampusForge Research Intelligence" />
-        </div>
-
-        <nav className="primary-nav" aria-label="Primary navigation">
-          {navigation.map(({ label, icon: Icon, to }) => (
-            <NavLink
-              className={({ isActive }) => isActive ? 'nav-item nav-item-active' : 'nav-item'}
-              to={to}
-              end={to === '/'}
-              key={label}
-            >
-              <Icon size={17} strokeWidth={1.7} aria-hidden="true" />
-              <span>{label}</span>
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="sidebar-footer">
-          <span className="institution-dot" aria-hidden="true" />
-          <div>
-            <p>University workspace</p>
-            <span>Institutional view</span>
-          </div>
-        </div>
-      </aside>
-      <main className="workspace">{children}</main>
+function SidebarBody({ onNavigate, showTheme = false }: {
+  onNavigate?: () => void
+  showTheme?: boolean
+}) {
+  return <>
+    <div className="brand-block">
+      <img className="brand-logo" src="/campusforge-logo.png" alt="CampusForge Research Intelligence" />
     </div>
-  )
+    <nav className="primary-nav" aria-label="Primary navigation">
+      {navigation.map(({ label, icon: Icon, to }) => {
+        return <NavLink className={({ isActive }) => isActive ? 'nav-item nav-item-active' : 'nav-item'}
+          to={to} end={to === '/'} onClick={onNavigate} key={label}>
+          <Icon size={18} strokeWidth={1.8} aria-hidden="true" /><span>{label}</span>
+        </NavLink>
+      })}
+    </nav>
+    <div className="sidebar-footer">
+      <span className="institution-dot" aria-hidden="true" />
+      <div><p>University workspace</p><span>Institutional view</span></div>
+      {showTheme && <div className="sidebar-theme-toggle"><ThemeToggle /></div>}
+    </div>
+  </>
+}
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  return <>
+    <a className="skip-link" href="#main-content">Skip to main content</a>
+    <div className="app-shell">
+      <aside className="sidebar desktop-sidebar">
+        <SidebarBody showTheme />
+      </aside>
+
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent className="mobile-sidebar">
+          <SheetTitle className="sr-only">CampusForge navigation</SheetTitle>
+          <SheetDescription className="sr-only">Navigate between CampusForge research intelligence pages.</SheetDescription>
+          <SidebarBody onNavigate={() => setMobileOpen(false)} />
+        </SheetContent>
+      </Sheet>
+
+      <div className="app-content">
+        <header className="app-header">
+          <Button className="mobile-menu-trigger" variant="outline" size="icon"
+            aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={19} /></Button>
+          <ThemeToggle />
+        </header>
+        <main className="workspace" id="main-content" tabIndex={-1}>
+          <div className="main-container">{children}</div>
+        </main>
+      </div>
+    </div>
+  </>
 }

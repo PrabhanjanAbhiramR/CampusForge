@@ -1,6 +1,10 @@
 import { ArrowRight, Search } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { AnalysisProgress } from '../components/AnalysisProgress'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
 import type { CampusForgeAnalysis } from '../data/mockAnalysis'
 import { analyzeOpportunity } from '../services/campusForgeApi'
 
@@ -15,63 +19,72 @@ const emptyResult: ComparisonResult = { analysis: null, error: null }
 function ComparisonCard({ label, result }: { label: string; result: ComparisonResult }) {
   if (result.error) {
     return (
-      <article className="comparison-card comparison-card-error">
+      <Card className="comparison-dashboard-card comparison-dashboard-error">
         <p className="comparison-label">{label}</p>
         <h2>Analysis unavailable</h2>
         <p>{result.error}</p>
-      </article>
+      </Card>
     )
   }
 
   if (!result.analysis) return null
 
-  const { opportunity, readiness, researchTrend, faculty, labs, equipment, projects, gaps } = result.analysis
-  const metrics = [
-    ['Faculty', faculty.length],
-    ['Labs', labs.length],
-    ['Equipment', equipment.length],
-    ['Projects', projects.length],
+  const { opportunity, readiness, researchTrend, gaps, canonicalEvidence } = result.analysis
+  const categories = [
+    ['faculty', 'Faculty'], ['labs', 'Labs'], ['equipment', 'Equipment'],
+    ['projects', 'Projects'], ['momentum', 'Momentum'],
+  ] as const
+  const evidenceDomains = [
+    ['faculty', 'Faculty'], ['labs', 'Labs'], ['equipment', 'Equipment'],
+    ['projects', 'Projects'], ['trends', 'Trends'],
   ] as const
   const readinessPercent = Math.min(100, Math.round((readiness.score / readiness.maximum) * 100))
 
   return (
-    <article className="comparison-card">
-      <p className="comparison-label">{label}</p>
-      <h2>{opportunity.title}</h2>
-
-      <div className="comparison-verdict">
-        <span>Verdict</span>
-        <strong>{opportunity.verdict}</strong>
+    <Card className="comparison-dashboard-card">
+      <div className="comparison-dashboard-heading">
+        <p className="comparison-label">{label}</p>
+        <h2>{opportunity.title}</h2>
+        <Badge>{opportunity.verdict}</Badge>
       </div>
 
-      <div className="comparison-signals">
-        <div>
-          <span>Readiness</span>
+      <div className="comparison-dashboard-signals">
+        <div className="comparison-readiness">
           <strong>{readiness.score} <small>/ {readiness.maximum}</small></strong>
-          <div className="readiness-track"><i style={{ width: `${readinessPercent}%` }} /></div>
+          <span>Readiness</span>
+          <div className="assessment-progress" aria-label={`Readiness ${readiness.score} out of ${readiness.maximum}`}><i style={{ width: `${readinessPercent}%` }} /></div>
         </div>
-        <div>
-          <span>Momentum</span>
-          <strong>{researchTrend.momentum}</strong>
-        </div>
+        <div><strong>{readiness.confidence}%</strong><span>Evidence completeness</span></div>
+        <div><strong>{researchTrend.momentum}</strong><span>Research momentum</span></div>
       </div>
 
-      <div className="comparison-metrics">
-        {metrics.map(([name, value]) => <div key={name}><strong>{value}</strong><span>{name}</span></div>)}
-      </div>
-
-      <section className="comparison-copy">
-        <h3>Key rationale</h3>
-        <p>{opportunity.rationale}</p>
+      <section className="comparison-dashboard-section">
+        <h3>Category scores</h3>
+        <div className="comparison-category-list">{categories.map(([key, name]) => {
+          const category = readiness.categories[key]
+          const width = Math.min(100, Math.max(0, (category.score / category.maximum) * 100))
+          return <div key={key}><div><span>{name}</span><strong>{category.score} / {category.maximum}</strong></div>
+            <div className="assessment-progress" aria-label={`${name} ${category.score} out of ${category.maximum}`}><i style={{ width: `${width}%` }} /></div>
+          </div>
+        })}</div>
       </section>
 
-      <section className="comparison-copy comparison-gaps">
+      <section className="comparison-dashboard-section">
+        <h3>Canonical evidence</h3>
+        <div className="comparison-evidence-list">{evidenceDomains.map(([key, name]) => {
+          const direct = canonicalEvidence[key].direct.length
+          const supporting = canonicalEvidence[key].adjacent.length
+          return <div key={key}><span>{name}</span><span><Badge variant="direct">Direct {direct}</Badge><Badge variant="supporting">Supporting {supporting}</Badge></span></div>
+        })}</div>
+      </section>
+
+      <section className="comparison-dashboard-section comparison-dashboard-gaps">
         <h3>Capability gaps</h3>
         {gaps.length > 0 ? (
-          <ul>{gaps.map((gap) => <li key={gap.id}><strong>{gap.title}</strong><span>{gap.explanation}</span></li>)}</ul>
-        ) : <p>No capability gaps were identified in the returned analysis.</p>}
+          <ul>{gaps.map((gap) => <li key={gap.id}><Badge variant="warning">Inferred gap</Badge><strong>{gap.title}</strong><span>{gap.explanation}</span></li>)}</ul>
+        ) : <p className="comparison-empty">No capability gaps were identified in the returned analysis.</p>}
       </section>
-    </article>
+    </Card>
   )
 }
 
@@ -187,13 +200,14 @@ export function CompareIdeasPage() {
         </p>
       </header>
 
+      <Card className="compare-form-card">
       <form className="compare-form" onSubmit={(event) => { event.preventDefault(); void compareIdeas() }}>
         <div className="compare-inputs">
           <label>
             <span>Opportunity 01</span>
             <div className="compare-input-control">
               <Search size={17} strokeWidth={1.7} aria-hidden="true" />
-              <input value={firstQuery} onChange={(event) => setFirstQuery(event.target.value)}
+              <Input value={firstQuery} onChange={(event) => setFirstQuery(event.target.value)}
                 placeholder="Describe the first research opportunity" autoComplete="off" />
             </div>
           </label>
@@ -201,17 +215,18 @@ export function CompareIdeasPage() {
             <span>Opportunity 02</span>
             <div className="compare-input-control">
               <Search size={17} strokeWidth={1.7} aria-hidden="true" />
-              <input value={secondQuery} onChange={(event) => setSecondQuery(event.target.value)}
+              <Input value={secondQuery} onChange={(event) => setSecondQuery(event.target.value)}
                 placeholder="Describe the second research opportunity" autoComplete="off" />
             </div>
           </label>
         </div>
-        <button className="compare-button" type="submit"
+        <Button className="compare-button" type="submit"
           disabled={analyzing || !firstQuery.trim() || !secondQuery.trim()}>
           <span>{analyzing ? 'Comparing' : 'Compare Ideas'}</span>
           <ArrowRight size={17} aria-hidden="true" />
-        </button>
+        </Button>
       </form>
+      </Card>
 
       {analyzing ? (
         <AnalysisProgress activeStep={activeStep} complete={false} comparison />
