@@ -58,13 +58,7 @@ app.post('/api/analyze', async (request, response) => {
 
     const repaired = await requestStructuredRepair(completed, genieConfig, query)
     console.info('Genie repair message completed:', JSON.stringify(summarizeGenieMessage(repaired.message)))
-    const analysis = adaptGenieMessage(
-      repaired.message,
-      completed.message,
-      completed.queryEvidence,
-      query,
-      completed.evidenceDomains,
-    )
+    const analysis = adaptGenieMessage(repaired.message, completed.message, completed.queryEvidence, query)
     const storedAt = Date.now()
     analysisCache.set(normalizedQuery, { analysis, expiresAt: storedAt + analysisCacheTtlMs })
     response.json(analysis)

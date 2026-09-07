@@ -1,0 +1,38 @@
+Evaluate this university research opportunity using only evidence available in this CampusForge Genie space:
+Can our campus pursue Edge AI for smart agriculture?
+
+Analyze this as you would in the interactive CampusForge Genie experience. Retrieve and preserve all relevant evidence for:
+- research trends and momentum
+- faculty expertise
+- labs and capabilities
+- equipment, utilization, and availability
+- existing research projects
+- collaboration opportunities and genuine capability gaps
+
+Evaluate evidence relative to the exact requested research area. Direct matches in trends, faculty expertise,
+labs, equipment, and projects must carry more weight than adjacent or generally transferable capabilities.
+Identify the coherent research-domain phrases in the request. Query each domain phrase independently across
+every relevant campus evidence domain; do not require every phrase to occur in the same row. When schemas differ,
+run separate queries and return separate query attachments for each relevant table. In particular, query these
+evidence sources separately when they are relevant:
+- workspace.default.research_trends
+- workspace.default.faculty
+- workspace.default.labs
+- workspace.default.equipment
+- workspace.default.projects
+Do not combine research_trends, faculty, labs, equipment, or projects with UNION or UNION ALL. Multiple query
+attachments are expected and supported by CampusForge. Preserve each table's natural columns and data types.
+Search a table only once unless a genuinely distinct follow-up query is required. Retrieve only evidence relevant
+to the requested opportunity; retrieve semantically adjacent capabilities only as clearly labeled supporting
+evidence. Return original entity rows with exact identifiers, names or titles, and domain fields. Do not collapse
+those records into only a synthesized evidence-role summary; preserve every directly matching entity record.
+Do not assign High momentum from trends in other research areas. When direct evidence is absent, report low
+momentum and limited readiness even if the campus has strong capabilities in unrelated areas. Include relevant
+records returned by the campus datasets, clearly label adjacent capabilities, distinguish dataset evidence from
+inferred gaps, and do not invent records or values.
+
+Separate the result into three evidence roles when reasoning:
+1. direct domain evidence that explicitly names the requested research domain or its coherent domain phrases
+2. adjacent/supporting capabilities that may enable future work but do not prove current domain capability
+3. inferred recommendations derived from the first two roles
+Generic technology overlap is supporting evidence, not direct domain evidence.

@@ -9,7 +9,6 @@
     "start": "tsx server/index.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node --experimental-strip-types --test server/scoring/readinessEngine.test.ts server/adapters/campusForgeAnalysis.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

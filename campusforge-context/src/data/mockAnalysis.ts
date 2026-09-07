@@ -11,20 +11,6 @@ export interface Readiness {
   maximum: number
   label: string
   disclaimer: string
-  confidence: number
-  categories: {
-    faculty: ReadinessCategory
-    labs: ReadinessCategory
-    equipment: ReadinessCategory
-    projects: ReadinessCategory
-    momentum: ReadinessCategory
-  }
-}
-
-export interface ReadinessCategory {
-  score: number
-  maximum: number
-  explanation: string
 }
 
 export interface ResearchTrend {
@@ -92,26 +78,6 @@ export interface EvidenceDefinition {
   description: string
 }
 
-export interface TrendEvidenceRecord {
-  id: string
-  researchArea: string
-  growth: ResearchTrend['momentum']
-  activityScore?: number
-}
-
-export interface ClassifiedEvidence<T> {
-  direct: T[]
-  adjacent: T[]
-}
-
-export interface CanonicalEvidence {
-  faculty: ClassifiedEvidence<FacultyMember>
-  labs: ClassifiedEvidence<Lab>
-  equipment: ClassifiedEvidence<EquipmentAsset>
-  projects: ClassifiedEvidence<ResearchProject>
-  trends: ClassifiedEvidence<TrendEvidenceRecord>
-}
-
 export interface CampusForgeAnalysis {
   opportunity: Opportunity
   readiness: Readiness
@@ -125,7 +91,6 @@ export interface CampusForgeAnalysis {
   recommendation: Recommendation
   evidence: EvidenceDefinition[]
   researchConnection: string
-  canonicalEvidence: CanonicalEvidence
 }
 
 export const mockAnalysis: CampusForgeAnalysis = {
@@ -139,14 +104,6 @@ export const mockAnalysis: CampusForgeAnalysis = {
     maximum: 100,
     label: 'Prototype readiness',
     disclaimer: 'Prototype decision-support indicator, not a guarantee of research outcomes.',
-    confidence: 90,
-    categories: {
-      faculty: { score: 22, maximum: 25, explanation: 'Three complementary faculty profiles support the opportunity.' },
-      labs: { score: 17, maximum: 20, explanation: 'Multiple labs provide relevant technical and domain capabilities.' },
-      equipment: { score: 17, maximum: 20, explanation: 'Available equipment provides complementary prototyping capacity.' },
-      projects: { score: 18, maximum: 20, explanation: 'Ongoing and completed projects provide relevant experience.' },
-      momentum: { score: 13, maximum: 15, explanation: 'The prototype trend signal indicates high research momentum.' },
-    },
   },
   researchTrend: {
     momentum: 'High',
@@ -199,11 +156,4 @@ export const mockAnalysis: CampusForgeAnalysis = {
     { kind: 'recommendation', label: 'Recommendation', description: 'Suggested actions based on analysis.' },
   ],
   researchConnection: 'These projects form a connected pathway from field sensing to edge inference and visual crop analysis.',
-  canonicalEvidence: {
-    faculty: { direct: [], adjacent: [] },
-    labs: { direct: [], adjacent: [] },
-    equipment: { direct: [], adjacent: [] },
-    projects: { direct: [], adjacent: [] },
-    trends: { direct: [], adjacent: [] },
-  },
 }
