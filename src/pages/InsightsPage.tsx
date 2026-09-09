@@ -1,3 +1,5 @@
+import { Badge } from '../components/ui/Badge'
+import { Card } from '../components/ui/Card'
 import { campusEquipment, campusFaculty, campusLabs, campusProjects } from '../data/campusData'
 import { mockAnalysis } from '../data/mockAnalysis'
 
@@ -45,55 +47,50 @@ export function InsightsPage() {
       <p className="page-intro">Review directly reported resource evidence alongside interpretations of where campus capabilities may be combined or strengthened.</p>
     </header>
 
-    <div className="insight-legend" aria-label="Evidence classification">
-      <span><i className="insight-data-key" /><b>Dataset evidence</b>Directly represented in shared prototype records.</span>
-      <span><i className="insight-inferred-key" /><b>Inferred insight</b>Interpretation derived from those records.</span>
+    <section className="insights-summary-grid" aria-label="Campus evidence summary">
+      <Card className="insights-summary-card"><span>Indexed faculty</span><strong>{campusFaculty.length}</strong><p>Faculty profiles in the prototype register</p></Card>
+      <Card className="insights-summary-card"><span>Indexed labs</span><strong>{campusLabs.length}</strong><p>Research labs in the prototype register</p></Card>
+      <Card className="insights-summary-card"><span>Indexed projects</span><strong>{campusProjects.length}</strong><p>Ongoing, completed, and prototype projects</p></Card>
+      <Card className="insights-summary-card"><span>Available capacity</span><strong>{availableUnderHalfUtilization.length}</strong><p>Available assets below 50% reported utilization</p></Card>
+    </section>
+
+    <div className="insights-evidence-legend" aria-label="Evidence classification">
+      <span><Badge variant="direct">Dataset evidence</Badge>Directly represented in shared prototype records.</span>
+      <span><Badge variant="supporting">Inferred insight</Badge>Interpretation derived from those records.</span>
     </div>
 
-    <section className="insight-section" aria-labelledby="available-equipment-title">
-      <div className="insight-section-number">01</div>
-      <div className="insight-section-content">
-        <span className="insight-kind data-kind">Dataset evidence</span>
-        <div className="insight-title-row"><div><p className="register-kicker">Reported capacity</p><h2 id="available-equipment-title">Available equipment below 50% utilization</h2></div><span>Prototype inventory</span></div>
-        <div className="insight-equipment-table-wrap"><table className="insight-equipment-table">
+    <section className="insights-dashboard-section" aria-labelledby="available-equipment-title">
+      <div className="insights-section-heading"><div><Badge variant="direct">Dataset evidence</Badge><p className="register-kicker">Reported capacity</p><h2 id="available-equipment-title">Available equipment below 50% utilization</h2></div><span>Prototype inventory</span></div>
+      <Card className="insights-equipment-card">
+        <div className="insights-table-wrap" role="region" aria-label="Available equipment table" tabIndex={0}><table className="insights-table">
           <thead><tr><th scope="col">Equipment</th><th scope="col">Supporting lab</th><th scope="col">Capability</th><th scope="col">Reported utilization</th></tr></thead>
           <tbody>{availableUnderHalfUtilization.map((equipment) => <tr key={equipment.id}>
-            <td><strong>{equipment.name}</strong></td><td>{equipment.labId ? campusLabs.find((lab) => lab.id === equipment.labId)?.name : 'Not reported'}</td><td>{equipment.capability}</td>
-            <td><div className="insight-utilization"><b>{equipment.utilization}%</b><span aria-hidden="true"><i style={{ width: `${equipment.utilization}%` }} /></span></div></td>
+            <td><strong>{equipment.name}</strong><span>{equipment.id}</span></td>
+            <td>{equipment.labId ? campusLabs.find((lab) => lab.id === equipment.labId)?.name : 'Not reported'}</td>
+            <td>{equipment.capability}</td>
+            <td><div className="insights-utilization"><div><i style={{ width: `${equipment.utilization}%` }} /></div><strong>{equipment.utilization}%</strong></div></td>
           </tr>)}</tbody>
         </table></div>
-        <p className="insight-source-note">Availability and utilization values are reproduced from the shared prototype equipment records.</p>
-      </div>
+        <p className="insights-source-note">Availability and utilization values are reproduced from the shared prototype equipment records.</p>
+      </Card>
     </section>
 
-    <section className="insight-section" aria-labelledby="strengths-title">
-      <div className="insight-section-number">02</div>
-      <div className="insight-section-content">
-        <span className="insight-kind inferred-kind">Inferred insight</span>
-        <div className="insight-title-row"><div><p className="register-kicker">Capability synthesis</p><h2 id="strengths-title">Major campus strengths</h2></div><span>{campusFaculty.length} faculty · {campusLabs.length} labs reviewed</span></div>
-        <div className="strength-list">{capabilityStrengths.map((strength) => <article key={strength.title}><strong>{strength.title}</strong><p>{strength.evidence}</p></article>)}</div>
-      </div>
+    <section className="insights-dashboard-section" aria-labelledby="strengths-title">
+      <div className="insights-section-heading"><div><Badge variant="supporting">Inferred insight</Badge><p className="register-kicker">Capability synthesis</p><h2 id="strengths-title">Major campus strengths</h2></div><span>{campusFaculty.length} faculty · {campusLabs.length} labs reviewed</span></div>
+      <div className="insights-strength-grid">{capabilityStrengths.map((strength) => <Card className="insights-strength-card" key={strength.title}><h3>{strength.title}</h3><p>{strength.evidence}</p></Card>)}</div>
     </section>
 
-    <section className="insight-section" aria-labelledby="reuse-title">
-      <div className="insight-section-number">03</div>
-      <div className="insight-section-content">
-        <span className="insight-kind inferred-kind">Inferred reuse opportunity</span>
-        <div className="insight-title-row"><div><p className="register-kicker">Research connections</p><h2 id="reuse-title">Opportunities to reuse existing work</h2></div><span>Suggested connections</span></div>
-        <div className="reuse-list">{reuseOpportunities.map((opportunity) => <article key={opportunity.title}>
-          <h3>{opportunity.title}</h3><div><span>Existing project evidence</span><p>{projectTitles(opportunity.projectIds).join(' · ')}</p></div><p>{opportunity.rationale}</p>
-        </article>)}</div>
-      </div>
+    <section className="insights-dashboard-section" aria-labelledby="reuse-title">
+      <div className="insights-section-heading"><div><Badge variant="supporting">Inferred reuse opportunity</Badge><p className="register-kicker">Research connections</p><h2 id="reuse-title">Opportunities to reuse existing work</h2></div><span>Suggested connections</span></div>
+      <div className="insights-reuse-grid">{reuseOpportunities.map((opportunity) => <Card className="insights-reuse-card" key={opportunity.title}>
+        <h3>{opportunity.title}</h3><div><span>Existing project evidence</span><p>{projectTitles(opportunity.projectIds).join(' · ')}</p></div><p>{opportunity.rationale}</p>
+      </Card>)}</div>
     </section>
 
-    <section className="insight-section gaps-insight-section" aria-labelledby="gaps-title">
-      <div className="insight-section-number">04</div>
-      <div className="insight-section-content">
-        <span className="insight-kind gap-kind">Inferred capability gap</span>
-        <div className="insight-title-row"><div><p className="register-kicker">Capabilities not represented</p><h2 id="gaps-title">Potential gaps to validate</h2></div><span>Not absence verified</span></div>
-        <div className="insight-gap-list">{mockAnalysis.gaps.map((gap) => <article key={gap.id}><strong>{gap.title}</strong><p>{gap.explanation}</p></article>)}</div>
-        <p className="insight-source-note">These gaps indicate what is not represented in the prototype dataset. They do not confirm that the capabilities are absent on campus.</p>
-      </div>
+    <section className="insights-dashboard-section insights-example-gaps" aria-labelledby="gaps-title">
+      <div className="insights-section-heading"><div><Badge variant="warning">Example opportunity-derived prototype insight</Badge><p className="register-kicker">Example assessment limitations</p><h2 id="gaps-title">Potential gaps to validate</h2></div><span>Not campus-wide facts</span></div>
+      <div className="insights-gap-grid">{mockAnalysis.gaps.map((gap) => <Card className="insights-gap-card" key={gap.id}><Badge variant="warning">Inferred gap</Badge><h3>{gap.title}</h3><p>{gap.explanation}</p></Card>)}</div>
+      <p className="insights-source-note">These example gaps come from the prototype opportunity assessment. They indicate what is not represented in that example’s dataset and do not confirm that the capabilities are absent across campus.</p>
     </section>
   </div>
 }

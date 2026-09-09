@@ -1,5 +1,8 @@
 import { ArrowRight, Search } from 'lucide-react'
 import type { FormEvent } from 'react'
+import { Button } from './ui/Button'
+import { Card } from './ui/Card'
+import { Input } from './ui/Input'
 
 const suggestions = [
   'Where could our water research strengths support regional resilience?',
@@ -21,24 +24,24 @@ export function OpportunityQuery({ query, analyzing, onQueryChange, onAnalyze }:
   }
 
   return (
-    <section className="query-section" aria-labelledby="query-label">
+    <Card className="query-section" aria-labelledby="query-label">
       <form onSubmit={handleSubmit}>
         <label className="query-label" id="query-label" htmlFor="research-query">
           What research opportunity should we evaluate?
         </label>
         <div className="query-control">
           <Search size={20} strokeWidth={1.7} aria-hidden="true" />
-          <input
+          <Input
             id="research-query"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Describe a field, capability, or opportunity"
             autoComplete="off"
           />
-          <button type="submit" disabled={!query.trim() || analyzing}>
+          <Button type="submit" disabled={!query.trim() || analyzing}>
             <span>{analyzing ? 'Analyzing' : 'Analyze Opportunity'}</span>
             <ArrowRight size={17} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -52,6 +55,6 @@ export function OpportunityQuery({ query, analyzing, onQueryChange, onAnalyze }:
           ))}
         </div>
       </div>
-    </section>
+    </Card>
   )
 }

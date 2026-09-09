@@ -1,4 +1,20 @@
-import type { CampusForgeAnalysis } from '../../src/data/mockAnalysis'
+import type {
+  CampusForgeAnalysis,
+  CanonicalEvidence,
+  EquipmentAsset,
+  FacultyMember,
+  Lab,
+  ResearchProject,
+  TrendEvidenceRecord,
+} from '../../src/data/mockAnalysis'
+import {
+  calculateReadiness,
+  type EvidenceDomainResult,
+  type ScoredEquipmentItem,
+  type ScoredEvidenceItem,
+  type ScoredProjectItem,
+  type ScoredTrendItem,
+} from '../scoring/readinessEngine.ts'
 import type { GenieAttachment, GenieMessage, GenieQueryEvidence } from '../services/databricksGenie'
 
 export interface SafeGenieStructure {
@@ -157,10 +173,10 @@ function matchesDomainFacet(value: unknown, facet: string[]) {
 
 function evidenceRows(queryEvidence: GenieQueryEvidence[]) {
   return queryEvidence.flatMap((result) => result.rows.map((row) => Object.fromEntries(
-    result.columns.map((column, index) => [
+    [...result.columns.map((column, index) => [
       normalizeEvidenceText(column).replace(/ /g, '_'),
       row[index],
-    ]),
+    ]), ['_campusforge_domain', result.domain]],
   )))
 }
 
@@ -202,6 +218,7 @@ type DirectCategory = 'faculty' | 'labs' | 'equipment' | 'projects'
 
 function rowHasCategory(row: Record<string, unknown>, category: DirectCategory) {
   const categoryLabel = normalizeEvidenceText([
+    row._campusforge_domain,
     row.evidence_role,
     row.entity_type,
     row.source_table,
@@ -229,42 +246,253 @@ function rawEntityKey(row: Record<string, unknown>, category: DirectCategory) {
   return row.project_id ?? row.entity_id ?? row.project_name ?? row.project_title ?? row.name_or_title ?? row.id
 }
 
-function directCount<T extends { id: string }>(items: T[], rows: Array<Record<string, unknown>>, category: DirectCategory) {
-  const keys = new Set(items.map((item) => normalizeEvidenceText(item.id)))
-  rows.forEach((row) => {
-    const key = normalizeEvidenceText(rawEntityKey(row, category))
-    if (key) keys.add(key)
-  })
-  return keys.size
+function requirementCoverage(value: unknown, facets: string[][]) {
+  const tokens = new Set(normalizeEvidenceText(JSON.stringify(value)).split(' ').map(evidenceToken).filter(Boolean))
+  return facets.map((facet) => facet.length > 0
+    ? facet.filter((token) => tokens.has(evidenceToken(token))).length / facet.length
+    : 0)
 }
 
-function equipmentAvailability(items: CampusForgeAnalysis['equipment'], rawRows: Array<Record<string, unknown>>) {
-  const statusByEquipment = new Map<string, string>(
-    items.map((item) => [normalizeEvidenceText(item.id), item.status]),
-  )
-  rawRows.forEach((row) => {
-    const key = normalizeEvidenceText(rawEntityKey(row, 'equipment'))
-    if (key && !statusByEquipment.has(key)) {
-      statusByEquipment.set(key, String(row.availability ?? row.status ?? ''))
+function evidenceAttributes(value: unknown, category: DirectCategory) {
+  const record = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+  const selected = category === 'faculty'
+    ? [record.expertise, record.expertise_areas, record.research_domains]
+    : category === 'labs'
+      ? [record.capabilities, record.lab_capabilities, record.focus]
+      : category === 'equipment'
+        ? [record.capability, record.capabilities, record.equipment_type]
+        : [record.fields, record.research_area, record.technologies]
+  return selected.flatMap((item) => Array.isArray(item) ? item : typeof item === 'string' ? item.split(/[,;|]/) : [])
+    .map((item) => String(item).trim())
+    .filter(Boolean)
+}
+
+function scoredItems(
+  items: Array<{ id: string }>,
+  rows: Array<Record<string, unknown>>,
+  category: DirectCategory,
+  facets: string[][],
+): ScoredEvidenceItem[] {
+  const scored = new Map<string, ScoredEvidenceItem>()
+  const canonicalIds = new Set(items.map((item) => normalizeEvidenceText(item.id)).filter(Boolean))
+  const rawKeys = new Set(rows.map((row) => normalizeEvidenceText(rawEntityKey(row, category))).filter(Boolean))
+  const add = (idValue: unknown, value: unknown, provenanceStrength: number) => {
+    const id = normalizeEvidenceText(idValue)
+    if (!id) return
+    const coverage = requirementCoverage(value, facets)
+    const next: ScoredEvidenceItem = {
+      id,
+      relevance: Math.max(coverage.length > 0 ? Math.max(...coverage) : 0, 0.65),
+      requirementCoverage: coverage,
+      attributes: evidenceAttributes(value, category),
+      provenanceStrength,
+    }
+    const existing = scored.get(id)
+    scored.set(id, existing ? {
+      ...existing,
+      relevance: Math.max(existing.relevance, next.relevance),
+      requirementCoverage: existing.requirementCoverage.map((amount, index) => Math.max(amount, next.requirementCoverage[index] ?? 0)),
+      attributes: [...new Set([...existing.attributes, ...next.attributes])],
+      provenanceStrength: Math.max(existing.provenanceStrength, next.provenanceStrength),
+    } : next)
+  }
+  items.forEach((item) => add(item.id, item, rawKeys.has(normalizeEvidenceText(item.id)) ? 1 : 0.7))
+  rows.forEach((row) => {
+    if (canonicalIds.has(normalizeEvidenceText(rawEntityKey(row, category)))) {
+      add(rawEntityKey(row, category), row, 1)
     }
   })
-  const statuses = [...statusByEquipment.values()]
-  if (statuses.length === 0) return 0
-  const weights: number[] = statuses.map((status) => status === 'Available' ? 1 : status === 'Limited' ? 0.5 : 0)
-  return weights.reduce((total, weight) => total + weight, 0) / weights.length
+  return [...scored.values()]
 }
 
-function verdictFor(score: number, hasDirectEvidence: boolean) {
-  if (!hasDirectEvidence) return 'Insufficient direct evidence'
-  if (score >= 75) return 'Strong direct-evidence fit'
-  if (score >= 50) return 'Moderate direct-evidence fit'
-  return 'Limited direct evidence'
+function equipmentStatus(value: unknown): ScoredEquipmentItem['status'] {
+  const normalized = normalizeEvidenceText(value)
+  if (normalized === 'available') return 'Available'
+  if (normalized === 'limited') return 'Limited'
+  return 'Unavailable'
+}
+
+function projectStatus(value: unknown): ScoredProjectItem['status'] {
+  return normalizeEvidenceText(value) === 'completed' ? 'Completed' : 'Ongoing'
+}
+
+function numericValue(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value)
+  return undefined
+}
+
+function stringValue(...values: unknown[]) {
+  return values.find((value): value is string => typeof value === 'string' && Boolean(value.trim()))?.trim()
+}
+
+function stringList(...values: unknown[]) {
+  const value = values.find((candidate) => Array.isArray(candidate) || typeof candidate === 'string')
+  if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean)
+  return typeof value === 'string' ? value.split(/[,;|]/).map((item) => item.trim()).filter(Boolean) : []
+}
+
+function mapFacultyRow(row: Record<string, unknown>): FacultyMember | null {
+  const id = stringValue(row.faculty_id, row.id, row.entity_id)
+  const name = stringValue(row.faculty_name, row.name, row.name_or_title, row.entity_name)
+  if (!id || !name) return null
+  return {
+    id,
+    name,
+    department: stringValue(row.department, row.department_name) ?? 'Not reported',
+    expertise: stringList(row.expertise, row.expertise_areas, row.research_domains),
+  }
+}
+
+function mapLabRow(row: Record<string, unknown>): Lab | null {
+  const id = stringValue(row.lab_id, row.id, row.entity_id)
+  const name = stringValue(row.lab_name, row.name, row.name_or_title, row.entity_name)
+  if (!id || !name) return null
+  return {
+    id,
+    name,
+    capabilities: stringList(row.capabilities, row.lab_capabilities, row.focus),
+  }
+}
+
+function mapEquipmentRow(row: Record<string, unknown>): EquipmentAsset | null {
+  const id = stringValue(row.equipment_id, row.id, row.entity_id)
+  const name = stringValue(row.equipment_name, row.name, row.name_or_title, row.entity_name)
+  const utilization = numericValue(row.utilization ?? row.utilization_percent)
+  if (!id || !name || utilization === undefined) return null
+  return {
+    id,
+    name,
+    labId: stringValue(row.lab_id, row.lab_name, row.department_or_lab) ?? '',
+    capability: stringValue(row.capability, row.capabilities, row.equipment_type) ?? 'Not reported',
+    utilization,
+    status: equipmentStatus(row.availability ?? row.status),
+  }
+}
+
+function mapProjectRow(row: Record<string, unknown>): ResearchProject | null {
+  const id = stringValue(row.project_id, row.id, row.entity_id)
+  const title = stringValue(row.project_title, row.project_name, row.title, row.name_or_title, row.entity_name)
+  if (!id || !title) return null
+  return {
+    id,
+    title,
+    status: projectStatus(row.status),
+    fields: stringList(row.fields, row.research_area, row.technologies, row.domain_field),
+  }
+}
+
+function mapTrendRow(row: Record<string, unknown>): TrendEvidenceRecord | null {
+  const researchArea = stringValue(row.research_area, row.domain_field, row.trend, row.topic, row.technology, row.name)
+  const growthValue = trendSignalValue(row)
+  if (!researchArea || !growthValue) return null
+  return {
+    id: stringValue(row.id, row.trend_id) ?? researchArea,
+    researchArea,
+    growth: trendMomentum([{ row }]),
+    activityScore: numericValue(row.research_activity_score ?? row.activity_score ?? row.score ?? row.publication_activity),
+  }
+}
+
+function uniqueEntities<T extends { id: string }>(items: T[]) {
+  return [...new Map(items.map((item) => [normalizeEvidenceText(item.id), item])).values()]
+}
+
+function withoutDirect<T extends { id: string }>(items: T[], direct: T[]) {
+  const directIds = new Set(direct.map((item) => normalizeEvidenceText(item.id)))
+  return items.filter((item) => !directIds.has(normalizeEvidenceText(item.id)))
+}
+
+function mappedRows<T>(rows: Array<Record<string, unknown>>, mapper: (row: Record<string, unknown>) => T | null) {
+  return rows.flatMap((row) => {
+    const mapped = mapper(row)
+    return mapped ? [mapped] : []
+  })
+}
+
+function buildCanonicalEvidence(
+  analysis: CampusForgeAnalysis,
+  rows: Array<Record<string, unknown>>,
+  direct: {
+    faculty: CampusForgeAnalysis['faculty']
+    labs: CampusForgeAnalysis['labs']
+    equipment: CampusForgeAnalysis['equipment']
+    projects: CampusForgeAnalysis['projects']
+    facultyRows: Array<Record<string, unknown>>
+    labRows: Array<Record<string, unknown>>
+    equipmentRows: Array<Record<string, unknown>>
+    projectRows: Array<Record<string, unknown>>
+    trendRows: Array<Record<string, unknown>>
+  },
+): CanonicalEvidence {
+  const allFacultyRows = rows.filter((row) => rowHasCategory(row, 'faculty'))
+  const allLabRows = rows.filter((row) => rowHasCategory(row, 'labs'))
+  const allEquipmentRows = rows.filter((row) => rowHasCategory(row, 'equipment'))
+  const allProjectRows = rows.filter((row) => rowHasCategory(row, 'projects'))
+  const directFaculty = uniqueEntities([...mappedRows(direct.facultyRows, mapFacultyRow), ...direct.faculty])
+  const directLabs = uniqueEntities([...mappedRows(direct.labRows, mapLabRow), ...direct.labs])
+  const directEquipment = uniqueEntities([...mappedRows(direct.equipmentRows, mapEquipmentRow), ...direct.equipment])
+  const directProjects = uniqueEntities([...mappedRows(direct.projectRows, mapProjectRow), ...direct.projects])
+  const directTrends = uniqueEntities(mappedRows(direct.trendRows, mapTrendRow))
+
+  return {
+    faculty: {
+      direct: directFaculty,
+      adjacent: withoutDirect(uniqueEntities([
+        ...mappedRows(allFacultyRows.filter((row) => !direct.facultyRows.includes(row)), mapFacultyRow),
+        ...analysis.faculty.filter((item) => !direct.faculty.includes(item)),
+      ]), directFaculty),
+    },
+    labs: {
+      direct: directLabs,
+      adjacent: withoutDirect(uniqueEntities([
+        ...mappedRows(allLabRows.filter((row) => !direct.labRows.includes(row)), mapLabRow),
+        ...analysis.labs.filter((item) => !direct.labs.includes(item)),
+      ]), directLabs),
+    },
+    equipment: {
+      direct: directEquipment,
+      adjacent: withoutDirect(uniqueEntities([
+        ...mappedRows(allEquipmentRows.filter((row) => !direct.equipmentRows.includes(row)), mapEquipmentRow),
+        ...analysis.equipment.filter((item) => !direct.equipment.includes(item)),
+      ]), directEquipment),
+    },
+    projects: {
+      direct: directProjects,
+      adjacent: withoutDirect(uniqueEntities([
+        ...mappedRows(allProjectRows.filter((row) => !direct.projectRows.includes(row)), mapProjectRow),
+        ...analysis.projects.filter((item) => !direct.projects.includes(item)),
+      ]), directProjects),
+    },
+    trends: {
+      direct: directTrends,
+      adjacent: withoutDirect(uniqueEntities(mappedRows(
+        rows.filter((row) => trendSignalValue(row) && !direct.trendRows.includes(row)),
+        mapTrendRow,
+      )), directTrends),
+    },
+  }
+}
+
+function retrievalFromEvidence(queryEvidence: GenieQueryEvidence[], supplied: EvidenceDomainResult[]) {
+  if (supplied.length > 0) return supplied
+  const domains = ['trends', 'faculty', 'labs', 'equipment', 'projects'] as const
+  return domains.flatMap((domain) => {
+    const matches = queryEvidence.filter((evidence) => evidence.domain === domain)
+    return matches.length > 0 ? [{
+      domain,
+      completed: true,
+      attachmentCount: matches.length,
+      rowCount: matches.reduce((total, evidence) => total + evidence.rowCount, 0),
+    }] : []
+  })
 }
 
 function calibrateDirectEvidence(
   analysis: CampusForgeAnalysis,
   query: string,
   queryEvidence: GenieQueryEvidence[],
+  evidenceDomains: EvidenceDomainResult[],
 ): CampusForgeAnalysis {
   const facets = domainFacets(query)
   if (facets.length === 0) return analysis
@@ -288,40 +516,142 @@ function calibrateDirectEvidence(
   const rawLabs = directRawRows(rows, 'labs', matchingFacets)
   const rawEquipment = directRawRows(rows, 'equipment', matchingFacets)
   const rawProjects = directRawRows(rows, 'projects', matchingFacets)
-  const categoryContributions = [
-    faculty.length > 0 || rawFaculty.length > 0 ? 1 : 0,
-    labs.length > 0 || rawLabs.length > 0 ? 1 : 0,
-    equipmentAvailability(equipment, rawEquipment),
-    projects.length > 0 || rawProjects.length > 0 ? 1 : 0,
-    uniqueTrendMatches.length > 0 ? 1 : 0,
-  ]
-  const totalContribution = categoryContributions.reduce((total, contribution) => total + contribution, 0)
-  const calibratedScore = Math.round(analysis.readiness.maximum * totalContribution / categoryContributions.length)
-  const verdict = verdictFor(calibratedScore, totalContribution > 0)
-  const momentum = trendMomentum(uniqueTrendMatches)
-  console.info('CampusForge direct evidence counts:', JSON.stringify({
-    faculty: directCount(faculty, rawFaculty, 'faculty'),
-    labs: directCount(labs, rawLabs, 'labs'),
-    equipment: directCount(equipment, rawEquipment, 'equipment'),
-    projects: directCount(projects, rawProjects, 'projects'),
-    trends: uniqueTrendMatches.length,
+  const canonicalEvidence = buildCanonicalEvidence(analysis, rows, {
+    faculty,
+    labs,
+    equipment,
+    projects,
+    facultyRows: rawFaculty,
+    labRows: rawLabs,
+    equipmentRows: rawEquipment,
+    projectRows: rawProjects,
+    trendRows: uniqueTrendMatches.map(({ row }) => row),
+  })
+  const directFaculty = scoredItems(canonicalEvidence.faculty.direct, rawFaculty, 'faculty', facets)
+  const directLabs = scoredItems(canonicalEvidence.labs.direct, rawLabs, 'labs', facets)
+  const directEquipmentBase = scoredItems(canonicalEvidence.equipment.direct, rawEquipment, 'equipment', facets)
+  const directProjectsBase = scoredItems(canonicalEvidence.projects.direct, rawProjects, 'projects', facets)
+  const adjacentFaculty = scoredItems(
+    canonicalEvidence.faculty.adjacent,
+    rows.filter((row) => rowHasCategory(row, 'faculty') && !rawFaculty.includes(row)),
+    'faculty', facets,
+  )
+  const adjacentLabs = scoredItems(
+    canonicalEvidence.labs.adjacent,
+    rows.filter((row) => rowHasCategory(row, 'labs') && !rawLabs.includes(row)),
+    'labs', facets,
+  )
+  const adjacentEquipmentBase = scoredItems(
+    canonicalEvidence.equipment.adjacent,
+    rows.filter((row) => rowHasCategory(row, 'equipment') && !rawEquipment.includes(row)),
+    'equipment', facets,
+  )
+  const adjacentProjectsBase = scoredItems(
+    canonicalEvidence.projects.adjacent,
+    rows.filter((row) => rowHasCategory(row, 'projects') && !rawProjects.includes(row)),
+    'projects', facets,
+  )
+  const equipmentById = new Map(
+    [...canonicalEvidence.equipment.direct, ...canonicalEvidence.equipment.adjacent]
+      .map((item) => [normalizeEvidenceText(item.id), item]),
+  )
+  const withEquipmentDetails = (item: ScoredEvidenceItem): ScoredEquipmentItem => {
+    const equipmentItem = equipmentById.get(item.id)
+    return {
+      ...item,
+      status: equipmentItem?.status ?? 'Unavailable',
+      utilization: equipmentItem?.utilization,
+    }
+  }
+  const projectsById = new Map(
+    [...canonicalEvidence.projects.direct, ...canonicalEvidence.projects.adjacent]
+      .map((item) => [normalizeEvidenceText(item.id), item]),
+  )
+  const withProjectDetails = (item: ScoredEvidenceItem): ScoredProjectItem => ({
+    ...item,
+    status: projectsById.get(item.id)?.status ?? 'Ongoing',
+  })
+  const directTrends: ScoredTrendItem[] = canonicalEvidence.trends.direct.map((trend) => ({
+    id: normalizeEvidenceText(trend.id),
+    relevance: 1,
+    growth: trend.growth,
+    activityScore: trend.activityScore,
+    provenanceStrength: 1,
   }))
+  const uncoveredFacultyRequirements = facets.flatMap((facet, index) =>
+    directFaculty.some((item) => (item.requirementCoverage[index] ?? 0) >= 0.75) ? [] : [facet.join(' ')])
+  const readiness = calculateReadiness({
+    requirementCount: Math.max(facets.length, 1),
+    faculty: { direct: directFaculty, adjacent: adjacentFaculty },
+    labs: { direct: directLabs, adjacent: adjacentLabs },
+    equipment: {
+      direct: directEquipmentBase.map(withEquipmentDetails),
+      adjacent: adjacentEquipmentBase.map(withEquipmentDetails),
+    },
+    projects: {
+      direct: directProjectsBase.map(withProjectDetails),
+      adjacent: adjacentProjectsBase.map(withProjectDetails),
+    },
+    trends: { direct: directTrends, adjacent: [] },
+    retrieval: retrievalFromEvidence(queryEvidence, evidenceDomains),
+    uncoveredFacultyRequirements,
+  })
+  console.info('CampusForge direct evidence counts:', JSON.stringify({
+    faculty: canonicalEvidence.faculty.direct.length,
+    labs: canonicalEvidence.labs.direct.length,
+    equipment: canonicalEvidence.equipment.direct.length,
+    projects: canonicalEvidence.projects.direct.length,
+    trends: canonicalEvidence.trends.direct.length,
+  }))
+  console.info('CampusForge Readiness Engine V2:', JSON.stringify({
+    score: readiness.score,
+    confidence: readiness.confidence,
+    categories: readiness.categories,
+  }))
+  const canonicalLabs = [...canonicalEvidence.labs.direct, ...canonicalEvidence.labs.adjacent]
+  const canonicalEquipment = mapEquipmentLabIds(
+    [...canonicalEvidence.equipment.direct, ...canonicalEvidence.equipment.adjacent],
+    canonicalLabs,
+    queryEvidence,
+  )
+  const equipmentByCanonicalId = new Map(canonicalEquipment.map((item) => [normalizeEvidenceText(item.id), item]))
+  const resolvedCanonicalEvidence: CanonicalEvidence = {
+    ...canonicalEvidence,
+    equipment: {
+      direct: canonicalEvidence.equipment.direct.map((item) => equipmentByCanonicalId.get(normalizeEvidenceText(item.id)) ?? item),
+      adjacent: canonicalEvidence.equipment.adjacent.map((item) => equipmentByCanonicalId.get(normalizeEvidenceText(item.id)) ?? item),
+    },
+  }
 
   return {
     ...analysis,
-    opportunity: { ...analysis.opportunity, verdict },
+    faculty: [...resolvedCanonicalEvidence.faculty.direct, ...resolvedCanonicalEvidence.faculty.adjacent],
+    labs: canonicalLabs,
+    equipment: canonicalEquipment,
+    projects: [...resolvedCanonicalEvidence.projects.direct, ...resolvedCanonicalEvidence.projects.adjacent],
+    canonicalEvidence: resolvedCanonicalEvidence,
+    opportunity: { ...analysis.opportunity, verdict: readiness.verdict },
     readiness: {
       ...analysis.readiness,
-      score: calibratedScore,
-      disclaimer: `${analysis.readiness.disclaimer} Score is calibrated to direct domain evidence and its breadth across campus records; adjacent capabilities alone do not establish readiness.`,
+      score: readiness.score,
+      maximum: readiness.maximum,
+      confidence: readiness.confidence,
+      categories: readiness.categories,
+      disclaimer: `${analysis.readiness.disclaimer} Readiness Engine V2 scores direct evidence depth, relevance, breadth, capacity, and momentum; adjacent capabilities contribute only limited support.`,
     },
     researchTrend: {
-      momentum,
+      momentum: readiness.momentum,
       summary: uniqueTrendMatches.length > 0
         ? `Momentum is based on ${uniqueTrendMatches.length} directly matched research trend record${uniqueTrendMatches.length === 1 ? '' : 's'}.`
         : 'No directly matching research trend was found in the retrieved campus evidence. Adjacent research areas were not used as a substitute.',
     },
-    recommendation: { ...analysis.recommendation, verdict },
+    gaps: readiness.gaps.map((gap) => ({
+      id: `readiness-v2-${gap.code}`,
+      title: gap.title,
+      explanation: gap.explanation,
+      evidenceKind: 'inferred-gap' as const,
+    })),
+    recommendation: { ...analysis.recommendation, verdict: readiness.verdict },
   }
 }
 
@@ -391,6 +721,7 @@ export function adaptGenieMessage(
   groundingMessage: GenieMessage = message,
   queryEvidence: GenieQueryEvidence[] = [],
   query = '',
+  evidenceDomains: EvidenceDomainResult[] = [],
 ): CampusForgeAnalysis {
   const orderedAttachments = [...(message.attachments ?? [])].sort((left, right) => {
     const priority = (attachment: GenieAttachment) => attachment.text?.purpose === 'TEXT_ATTACHMENT_PURPOSE_ANSWER' ? 0 : 1
@@ -401,7 +732,7 @@ export function adaptGenieMessage(
     const parsed = parseCandidate(candidate)
     if (isCampusForgeAnalysis(parsed)) {
       const grounded = groundAnalysis(parsed, groundingMessage, queryEvidence)
-      return calibrateDirectEvidence(grounded, query, queryEvidence)
+      return calibrateDirectEvidence(grounded, query, queryEvidence, evidenceDomains)
     }
   }
 
