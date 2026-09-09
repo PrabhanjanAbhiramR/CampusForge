@@ -1,4 +1,6 @@
 import { campusFaculty, campusLabs } from '../data/campusData'
+import { Badge } from '../components/ui/Badge'
+import { Card } from '../components/ui/Card'
 
 interface CollaborationRecommendation {
   id: string
@@ -60,31 +62,33 @@ export function CollaborationsPage() {
       <p className="page-intro">Explore research teams that could connect complementary expertise and infrastructure across campus.</p>
     </header>
 
-    <aside className="recommendation-disclaimer" aria-label="Recommendation status">
-      <strong>Recommendation status</strong>
+    <aside className="collaborations-disclaimer" aria-label="Recommendation status">
+      <Badge variant="warning">Prototype recommendations</Badge>
       <p>These are prototype recommendations inferred from the campus resource data. They are not existing or verified collaborations.</p>
     </aside>
 
-    <section className="collaboration-register" aria-labelledby="collaboration-register-title">
-      <div className="collaboration-register-heading">
+    <section className="collaborations-dashboard" aria-labelledby="collaboration-register-title">
+      <div className="collaborations-dashboard-heading">
         <div><p className="register-kicker">Recommended team formations</p><h2 id="collaboration-register-title">Cross-campus opportunities</h2></div>
         <span>{recommendations.length} recommendations</span>
       </div>
 
-      <div className="recommendation-list">
-        {recommendations.map((recommendation, index) => <article className="recommendation-card" key={recommendation.id}>
-          <div className="recommendation-index">{String(index + 1).padStart(2, '0')}</div>
-          <div className="recommendation-body">
-            <span className="recommendation-label">Recommended collaboration</span>
+      <div className="collaboration-card-grid">
+        {recommendations.map((recommendation, index) => <Card className="collaboration-dashboard-card" key={recommendation.id}>
+          <div className="collaboration-card-heading">
+            <div><span>{String(index + 1).padStart(2, '0')}</span><Badge variant="direct">Prototype recommendation</Badge></div>
             <h3>{recommendation.opportunity}</h3>
-            <div className="recommendation-details">
-              <div><span>Departments involved</span><p>{recommendation.departments.join(' · ')}</p></div>
-              <div><span>Relevant faculty</span><p>{namesFor(recommendation.facultyIds).join(' · ')}</p></div>
-              <div><span>Supporting labs</span><p>{labsFor(recommendation.labIds).join(' · ')}</p></div>
-            </div>
-            <div className="recommendation-rationale"><span>Rationale</span><p>{recommendation.rationale}</p></div>
           </div>
-        </article>)}
+          <div className="collaboration-card-section">
+            <span>Departments</span>
+            <div className="collaboration-tag-list">{recommendation.departments.map((department) => <Badge variant="supporting" key={department}>{department}</Badge>)}</div>
+          </div>
+          <div className="collaboration-card-details">
+            <section><span>Faculty involved</span><ul>{namesFor(recommendation.facultyIds).map((name) => <li key={name}>{name}</li>)}</ul></section>
+            <section><span>Supporting labs</span><ul>{labsFor(recommendation.labIds).map((lab) => <li key={lab}>{lab}</li>)}</ul></section>
+          </div>
+          <div className="collaboration-card-rationale"><span>Rationale</span><p>{recommendation.rationale}</p></div>
+        </Card>)}
       </div>
     </section>
   </div>

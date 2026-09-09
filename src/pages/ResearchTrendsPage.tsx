@@ -54,7 +54,7 @@ export function ResearchTrendsPage() {
           <span>{researchTrendOpportunities.length} prototype areas</span>
         </div>
 
-        <div className="trends-table-wrap">
+        <div className="trends-table-wrap" role="region" aria-label="Research trends table" tabIndex={0}>
           <table className="trends-table">
             <thead>
               <tr>

@@ -1,9 +1,9 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { BarChart3, BookOpenText, Building2, Columns2, Compass, Menu, Network } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { ThemeToggle } from './ThemeToggle'
 import { Button } from './ui/Button'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/Sheet'
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from './ui/Sheet'
 
 const navigation = [
   { label: 'Discover', icon: Compass, to: '/' },
@@ -40,6 +40,11 @@ function SidebarBody({ onNavigate, showTheme = false }: {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 })
+  }, [pathname])
 
   return <>
     <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -54,18 +59,20 @@ export function AppShell({ children }: { children: ReactNode }) {
           <SheetDescription className="sr-only">Navigate between CampusForge research intelligence pages.</SheetDescription>
           <SidebarBody onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
-      </Sheet>
 
-      <div className="app-content">
-        <header className="app-header">
-          <Button className="mobile-menu-trigger" variant="outline" size="icon"
-            aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={19} /></Button>
-          <ThemeToggle />
-        </header>
-        <main className="workspace" id="main-content" tabIndex={-1}>
-          <div className="main-container">{children}</div>
-        </main>
-      </div>
+        <div className="app-content">
+          <header className="app-header">
+            <SheetTrigger asChild>
+              <Button className="mobile-menu-trigger" variant="outline" size="icon"
+                aria-label="Open navigation"><Menu size={19} /></Button>
+            </SheetTrigger>
+            <ThemeToggle />
+          </header>
+          <main className="workspace" id="main-content" tabIndex={-1}>
+            <div className="main-container">{children}</div>
+          </main>
+        </div>
+      </Sheet>
     </div>
   </>
 }

@@ -29,7 +29,7 @@ function LabRegister() {
 }
 
 function EquipmentRegister() {
-  return <div className="resource-dashboard-table-wrap">
+  return <div className="resource-dashboard-table-wrap" role="region" aria-label="Equipment inventory table" tabIndex={0}>
     <table className="resource-dashboard-table">
       <thead><tr><th scope="col">Equipment</th><th scope="col">Associated lab</th><th scope="col">Capability</th><th scope="col">Utilization</th><th scope="col">Status</th></tr></thead>
       <tbody>{campusEquipment.map((equipment) => {
@@ -47,7 +47,7 @@ function EquipmentRegister() {
 }
 
 function ProjectRegister() {
-  return <div className="resource-dashboard-table-wrap">
+  return <div className="resource-dashboard-table-wrap" role="region" aria-label="Projects inventory table" tabIndex={0}>
     <table className="resource-dashboard-table resource-project-table">
       <thead><tr><th scope="col">Project</th><th scope="col">Research fields</th><th scope="col">Status</th></tr></thead>
       <tbody>{campusProjects.map((project) => <tr key={project.id}>

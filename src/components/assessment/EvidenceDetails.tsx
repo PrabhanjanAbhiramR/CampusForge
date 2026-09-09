@@ -27,14 +27,14 @@ function LabItem(lab: Lab) {
 }
 
 function EquipmentTable({ items, labs }: { items: EquipmentAsset[]; labs: Map<string, string> }) {
-  return <div className="assessment-table-wrap"><table className="assessment-table">
+  return <div className="assessment-table-wrap" role="region" aria-label="Canonical equipment evidence table" tabIndex={0}><table className="assessment-table">
     <thead><tr><th>Name</th><th>Lab</th><th>Capability</th><th>Utilization</th><th>Status</th></tr></thead>
     <tbody>{items.map((item) => <tr key={item.id}><td><strong>{item.name}</strong></td><td>{labs.get(item.labId) ?? item.labId}</td><td>{item.capability}</td><td>{item.utilization}%</td><td><Badge variant={item.status === 'Available' ? 'success' : item.status === 'Limited' ? 'warning' : 'outline'}>{item.status}</Badge></td></tr>)}</tbody>
   </table></div>
 }
 
 function ProjectTable({ items }: { items: ResearchProject[] }) {
-  return <div className="assessment-table-wrap"><table className="assessment-table">
+  return <div className="assessment-table-wrap" role="region" aria-label="Canonical project evidence table" tabIndex={0}><table className="assessment-table">
     <thead><tr><th>Title</th><th>Status</th><th>Fields</th></tr></thead>
     <tbody>{items.map((item) => <tr key={item.id}><td><strong>{item.title}</strong></td><td><Badge variant="outline">{item.status}</Badge></td><td>{item.fields.join(' · ')}</td></tr>)}</tbody>
   </table></div>
